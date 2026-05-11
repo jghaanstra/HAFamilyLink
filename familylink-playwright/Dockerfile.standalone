@@ -30,6 +30,7 @@ RUN apt-get update \
         fluxbox \
         dbus \
         xterm \
+        chromium \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -48,33 +49,29 @@ COPY requirements.txt .
 
 RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
-# Install Playwright and Chromium
+# Install Playwright and its own Chromium for the application itself
 RUN pip3 install --no-cache-dir --break-system-packages playwright \
     && playwright install --with-deps chromium
 
-# Create browser wrapper commands for manual use inside noVNC/Fluxbox
-RUN set -eux; \
-    CHROME_PATH="$(find /ms-playwright -type f -path '*/chrome-linux/chrome' | head -n 1)"; \
-    test -n "$CHROME_PATH"; \
-    echo "Found Playwright Chromium at: $CHROME_PATH"; \
-    printf '#!/bin/bash\nexec "%s" --no-sandbox --disable-dev-shm-usage "$@"\n' "$CHROME_PATH" > /usr/local/bin/chromium; \
-    chmod +x /usr/local/bin/chromium; \
-    ln -sf /usr/local/bin/chromium /usr/local/bin/chromium-browser; \
-    ln -sf /usr/local/bin/chromium /usr/local/bin/google-chrome
+# Create Docker-safe browser launcher for manual use in noVNC
+RUN printf '%s\n' \
+    '#!/bin/bash' \
+    'exec /usr/bin/chromium --no-sandbox --disable-dev-shm-usage "$@"' \
+    > /usr/local/bin/chromium-docker \
+    && chmod +x /usr/local/bin/chromium-docker
 
-# Optional desktop entry
-RUN set -eux; \
-    mkdir -p /usr/share/applications; \
-    printf '%s\n' \
+# Optional desktop entry for the browser
+RUN mkdir -p /usr/share/applications \
+    && printf '%s\n' \
         '[Desktop Entry]' \
-        'Name=Chromium' \
-        'Comment=Playwright Chromium Browser' \
-        'Exec=/usr/local/bin/chromium' \
-        'Icon=web-browser' \
+        'Name=Chromium Docker' \
+        'Comment=Chromium Browser for Docker/noVNC' \
+        'Exec=/usr/local/bin/chromium-docker' \
+        'Icon=chromium' \
         'Terminal=false' \
         'Type=Application' \
         'Categories=Network;WebBrowser;' \
-        > /usr/share/applications/chromium.desktop
+        > /usr/share/applications/chromium-docker.desktop
 
 COPY app/ /app/app/
 
